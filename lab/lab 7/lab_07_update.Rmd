@@ -8,7 +8,7 @@ output: html_document
 
 Lab07 - API Keys and Tidycensus
 
-
+#comment hi sophie
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
