@@ -1,0 +1,363 @@
+---
+title: "Reverse Engineering Project"
+author: "Raphael Romero Ruiz & Sophie"
+date: "`Oct. 9 2025`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("tidycensus")
+```
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(dplyr)
+library(tidycensus)
+library(readxl)
+
+census_api_key("a053b1e13b17cfecd7fea96af2fc15059d046f8c", install=TRUE)
+```
+
+```{r}
+homicides_wapo <- read_csv("data-homicides/homicide-data.csv") %>% 
+  clean_names()
+```
+
+```{r}
+# First make sure reported_date is in proper date format
+homicides_wapo <- homicides_wapo %>%
+  mutate(reported_date = case_when(
+    reported_date == 201511105 ~ 20151105,
+    reported_date == 201511018 ~ 20151118, 
+    TRUE ~ reported_date
+  )) %>%
+  mutate(reported_date = ymd(reported_date))
+```
+
+```{r}
+# Get population estimates for Baltimore City (2007-2014)
+# First get 2007-2009 from XLS file
+census_pop_2007_2009 <- read_xls("census-data/co-est00int-01-24.xls") %>%
+  slice((6):(n() - 8)) %>%
+  clean_names() %>%
+  filter(str_detect(table_with_row_headers_in_column_a_and_column_headers_in_rows_3_through_4_leading_dots_indicate_sub_parts, "Baltimore city")) %>%
+  transmute(
+    pop_2007 = as.numeric(x10),
+    pop_2008 = as.numeric(x11), 
+    pop_2009 = as.numeric(x12)
+  ) %>%
+  pivot_longer(cols = everything(),
+               names_to = "year_col", 
+               values_to = "population") %>%
+  mutate(year = as.numeric(str_extract(year_col, "[0-9]{4}"))) %>%
+  select(year, population)
+```
+
+```{r}
+# Then get 2010-2014 from Census API
+census_pop_2010_2014 <- get_estimates(
+    geography = "county",
+    vintage = 2019,
+    time_series = TRUE,
+    state = "MD",
+    county = "510",  # Baltimore City FIPS code
+    variable = "POP"
+  ) %>%
+  # The date column uses Census codes based on official documentation
+  mutate(year = case_when(
+    DATE == 1 ~ 2010,  # April 1, 2010 Census count
+    DATE == 2 ~ NA,  # April 1, 2010 estimates base (not used)
+    DATE == 3 ~ NA,  # July 1, 2010 estimate (not used)
+    DATE == 4 ~ 2011,  # July 1, 2011 estimate
+    DATE == 5 ~ 2012,  # July 1, 2012 estimate
+    DATE == 6 ~ 2013,  # July 1, 2013 estimate
+    DATE == 7 ~ 2014,  # July 1, 2014 estimate
+    DATE == 8 ~ 2015,  # July 1, 2015 estimate
+    DATE == 9 ~ 2016,  # July 1, 2016 estimate
+    DATE == 10 ~ 2017, # July 1, 2017 estimate
+    DATE == 11 ~ 2018, # July 1, 2018 estimate
+    DATE == 12 ~ 2019, # July 1, 2019 estimate
+    TRUE ~ as.numeric(DATE)
+  )) %>%
+  select(year, value) %>%
+  rename(population = value) %>%
+  filter(year >= 2010 & year <= 2014) %>%
+  arrange(year)
+```
+
+```{r}
+# Combine 2007-2009 Excel data with 2010-2014 Census API data
+pop_estimates_pre_2015 <- bind_rows(
+  census_pop_2007_2009,
+  census_pop_2010_2014
+) %>%
+  arrange(year)
+```
+
+```{r}
+# Get population estimates for Baltimore City (post-2015)
+pop_estimates_post_2015 <- get_estimates(
+    geography = "county",
+    vintage = 2019,
+    time_series = TRUE,
+    state = "MD",
+    county = "510",  # Baltimore City FIPS code
+    variable = "POP"
+  ) %>%
+  # The date column uses Census codes based on official documentation
+  mutate(year = case_when(
+    DATE == 1 ~ 2010,  # April 1, 2010 Census count
+    DATE == 2 ~ 2010,  # April 1, 2010 estimates base
+    DATE == 3 ~ 2010,  # July 1, 2010 estimate
+    DATE == 4 ~ 2011,  # July 1, 2011 estimate
+    DATE == 5 ~ 2012,  # July 1, 2012 estimate
+    DATE == 6 ~ 2013,  # July 1, 2013 estimate
+    DATE == 7 ~ 2014,  # July 1, 2014 estimate
+    DATE == 8 ~ 2015,  # July 1, 2015 estimate
+    DATE == 9 ~ 2016,  # July 1, 2016 estimate
+    DATE == 10 ~ 2017, # July 1, 2017 estimate
+    DATE == 11 ~ 2018, # July 1, 2018 estimate
+    DATE == 12 ~ 2019, # July 1, 2019 estimate
+    TRUE ~ as.numeric(DATE)
+  )) %>%
+  select(year, value) %>%
+  rename(population = value) %>%
+  filter(year >= 2015 & year <= 2017) %>%
+  arrange(year)
+```
+
+```{r}
+# Get Baltimore homicides and arrests by year before 2015
+num_hom_and_arrest_bmore_by_year_pre_2015 <- homicides_wapo %>%
+  filter(city == "Baltimore" & reported_date < "2015-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)  # Sort by year
+```
+
+```{r}
+# Get Baltimore homicides and arrests for 2015-2017
+num_hom_and_arrests_bmore_by_year_post_2015 <- homicides_wapo %>%
+  filter(city == "Baltimore" & reported_date >= "2015-01-01" & reported_date <= "2017-12-31") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)
+```
+
+```{r}
+# Calculate pre-2015 rates
+bmore_hom_rates_pre_2015 <- num_hom_and_arrest_bmore_by_year_pre_2015 %>%
+  left_join(pop_estimates_pre_2015, by = "year") %>%
+  mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
+```
+
+```{r}
+# Calculate post-2015 rates
+bmore_hom_rates_post_2015 <- num_hom_and_arrests_bmore_by_year_post_2015 %>%
+  left_join(pop_estimates_post_2015, by = "year") %>%
+  mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
+```
+
+```{r}
+# Combine all years into one comparison
+bmore_rates_all_years <- bind_rows(
+  bmore_hom_rates_pre_2015,
+  bmore_hom_rates_post_2015
+) %>%
+  arrange(year)
+```
+
+```{r}
+#everything below here is for assignment 3 and beyond
+```
+
+
+```{r}
+# CHICAGO ANALYSIS
+# Get population estimates for Chicago (2015-2017)
+pop_estimates_chicago_post_2015 <- get_estimates(
+    geography = "place",
+    vintage = 2019,
+    time_series = TRUE,
+    state = "IL",
+    place = 1400,
+    variable = "POP"
+  ) %>%
+  filter(str_detect(NAME, "^Chicago city, Illinois$")) %>%
+  mutate(year = case_when(
+    DATE == 1 ~ 2010,
+    DATE == 2 ~ 2010,
+    DATE == 3 ~ 2010,
+    DATE == 4 ~ 2011,
+    DATE == 5 ~ 2012,
+    DATE == 6 ~ 2013,
+    DATE == 7 ~ 2014,
+    DATE == 8 ~ 2015,
+    DATE == 9 ~ 2016,
+    DATE == 10 ~ 2017,
+    DATE == 11 ~ 2018,
+    DATE == 12 ~ 2019,
+    TRUE ~ as.numeric(DATE)
+  )) %>%
+  select(year, value) %>%
+  rename(population = value) %>%
+  filter(year >= 2015 & year <= 2017) %>%
+  arrange(year)
+```
+```{r}
+# Get Chicago homicides for 2015-2017
+num_hom_and_arrests_chicago_by_year_post_2015 <- homicides_wapo %>%
+  filter(city == "Chicago" & reported_date >= "2015-01-01" & reported_date <= "2017-12-31") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)
+```
+
+```{r}
+# Calculate post-2015 rates
+chi_hom_rates_post_2015 <- num_hom_and_arrests_chicago_by_year_post_2015 %>%
+  left_join(pop_estimates_chicago_post_2015, by = "year") %>%
+  mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
+```
+
+```{r}
+# BOSTON ANALYSIS
+# Get Boston homicides and arrests by year (pre-2015)
+num_hom_and_arrest_boston_by_year_pre_2015 <- homicides_wapo %>%
+  filter(city == "Boston" & reported_date < "2015-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)
+```
+```{r}
+# Get population estimates for Boston (2015-2017)
+pop_estimates_boston_post_2015 <- get_estimates(
+    geography = "place",
+    vintage = 2019,
+    time_series = TRUE,
+    state = "MA",
+    place = "07000",  # Boston place code
+    variable = "POP"
+  ) %>%
+  mutate(year = case_when(
+    DATE == 1 ~ 2010,
+    DATE == 2 ~ 2010,
+    DATE == 3 ~ 2010,
+    DATE == 4 ~ 2011,
+    DATE == 5 ~ 2012,
+    DATE == 6 ~ 2013,
+    DATE == 7 ~ 2014,
+    DATE == 8 ~ 2015,
+    DATE == 9 ~ 2016,
+    DATE == 10 ~ 2017,
+    DATE == 11 ~ 2018,
+    DATE == 12 ~ 2019,
+    TRUE ~ as.numeric(DATE)
+  )) %>%
+  #filter(str_detect(NAME, "^Boston, Massachusetts$")) %>% 
+  select(year, value) %>%
+  rename(population = value) %>%
+  filter(year >= 2015 & year <= 2017) %>%
+  arrange(year)
+```
+```{r}
+# Get Boston homicides (2015-2017)
+num_hom_and_arrests_boston_by_year_post_2015 <- homicides_wapo %>%
+  filter(city == "Boston" & reported_date >= "2015-01-01" & reported_date <= "2017-12-31") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)
+```
+
+```{r}
+# ST. LOUIS ANALYSIS
+# Get St. Louis homicides and arrests by year before 2015
+num_hom_and_arrest_stl_by_year_pre_2015 <- homicides_wapo %>%
+  filter(city == "St. Louis" & reported_date < "2015-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)
+```
+
+```{r}
+# Get population estimates for St. Louis
+pop_estimates_stl_post_2015 <- get_estimates(
+    geography = "place",
+    vintage = 2019,
+    time_series = TRUE,
+    state = "MO",
+    place = "65000",  # St. Louis place code
+    variable = "POP"
+  ) %>%
+  mutate(year = case_when(
+    DATE == 1 ~ 2010,
+    DATE == 2 ~ 2010,
+    DATE == 3 ~ 2010,
+    DATE == 4 ~ 2011,
+    DATE == 5 ~ 2012,
+    DATE == 6 ~ 2013,
+    DATE == 7 ~ 2014,
+    DATE == 8 ~ 2015,
+    DATE == 9 ~ 2016,
+    DATE == 10 ~ 2017,
+    DATE == 11 ~ 2018,
+    DATE == 12 ~ 2019,
+    TRUE ~ as.numeric(DATE)
+  )) %>%
+  #filter(str_detect(NAME, "^St. Louis, Missouri$")) %>%
+  select(year, value) %>%
+  rename(population = value) %>%
+  filter(year >= 2015 & year <= 2017) %>%
+  arrange(year)
+```
+
+```{r}
+# Get St. Louis homicides for 2015-2017
+num_hom_and_arrests_stl_by_year_post_2015 <- homicides_wapo %>%
+  filter(city == "St. Louis" & reported_date >= "2015-01-01" & reported_date <= "2017-12-31") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)
+
+# Use census estimates for St. Louis populations
+populations_stl_post_2015 <- pop_estimates_stl_post_2015
+```
