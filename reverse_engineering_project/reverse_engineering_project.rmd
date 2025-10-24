@@ -185,6 +185,8 @@ bmore_hom_rates_post_2015 <- num_hom_and_arrests_bmore_by_year_post_2015 %>%
   mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
 ```
 
+192-196: This combines the pre-2015 and post-2015 Baltimore homicide rate datasets into one complete dateset going from 2007 to 2017 and puts it in chronological order The bind_rows() function stacks the two datasets into a single dataset while arrange() ensures all the years are ordered sequentially, creating one continous time frame that allows for easy analysis of how Baltimore's homicide rates and arrest rates changed before and after 2015.
+
 ```{r}
 # Combine all years into one comparison
 bmore_rates_all_years <- bind_rows(
@@ -198,6 +200,7 @@ bmore_rates_all_years <- bind_rows(
 #everything below here is for assignment 3 and beyond
 ```
 
+208-235: This downloads annual population estimates for Chicago from 2015 through 2017 using the Census API, giving the demographic data needed to calculate homicide rates in comparison with Baltimore. the get_estimates() function retrives Chicago's population using its place code (1400), filtering it to ensure its capturing the correct city rather than suburbs. It then converts the Census Bureau's data into readable years, then it keeps only the 2015-2017 estimates and organizes them into two-columns with year and population that can be merged with Chicago homicide data for a parallel analysis to Baltimore's post-2015 trends. 
 
 ```{r}
 # CHICAGO ANALYSIS
@@ -231,6 +234,9 @@ pop_estimates_chicago_post_2015 <- get_estimates(
   filter(year >= 2015 & year <= 2017) %>%
   arrange(year)
 ```
+
+242-251: This analyzes Chicago homicide data from 2015 to 2017, calculating the total number of homicides, arrests and the arrest rate for each year to create a comparison dataset with Baltimore. This code filters the Washington Post homicide data to include only Chicago cases between Jan. 1, 2015 and Dec. 31, 2017, and extracts the year from each homicide's reported date. It then groups the data by year to count total homicides, tally cases closed by arrest and calculate the percentage of homicides that resulted in arrests. This provides a parallel analysis that allows us to see whether baltimore's post-2015 trends were unique or showed a larger national pattern in urban policing. 
+
 ```{r}
 # Get Chicago homicides for 2015-2017
 num_hom_and_arrests_chicago_by_year_post_2015 <- homicides_wapo %>%
@@ -245,12 +251,18 @@ num_hom_and_arrests_chicago_by_year_post_2015 <- homicides_wapo %>%
   arrange(year)
 ```
 
+258-260: This merges Chicago's 2015-2017 homicide statistics with its population data to calculate the city's homicide rate per 100,000 residents for those years. The left_join() function combines the homicide and arrest counts with the corresponding population estimates by years then calculates the homicide rate by dividng the number of homicides by the population and multiplying by 100,000, creating a metric that can be directly compared with Baltimore's rates to determine whether both cities had similar increases in violence during the same period of time.  
+
 ```{r}
 # Calculate post-2015 rates
 chi_hom_rates_post_2015 <- num_hom_and_arrests_chicago_by_year_post_2015 %>%
   left_join(pop_estimates_chicago_post_2015, by = "year") %>%
   mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
 ```
+
+268-277: This analuzes Boston homicide data before 2015, calculating the total number of homicides, arrests and arrest rate for each year. The code filters the Washington Post homicide dataset to have only Boston cases before Jan 1, 2015, and extracts the year from each homicide's reported date. It then groups the data by year to count the total amount of homicides, tallies the cases closed by arrests and calculates the percent of homicides that resulted in arrest.
+
+283-310: This downloads annual population estimates for Boston from 2015 to 2017 using the Census API, giving the demographic data needed to calculate homicicde rates for another comparison city. The get_estimates() fnction gets Boston's population using its place code (07000) in Massachusetts, converting the Census' date codes into readable years, and then keeps only the 2015-2017 estimates. It then organizes them into a two-column format with year and population that can be put together with Boston homicide data, allowing us to compare whether Baltimore's post-2015 homicide rate changes were different or similar to trends in Chicago and Boston.
 
 ```{r}
 # BOSTON ANALYSIS
@@ -297,6 +309,11 @@ pop_estimates_boston_post_2015 <- get_estimates(
   filter(year >= 2015 & year <= 2017) %>%
   arrange(year)
 ```
+
+318-328: This analyzes Boston homicide data from 2015 to 2017, calculating the total number of homicides, arrests and arrest rate for each year to complete the the comparison dataset with Baltimore and Chicago. The code filters the Washington Post homicide data to include only Boston cases between Jan. 1m 2015, and Dec. 31, 2017. It extracts the year from each homicide;s date, and then groups the data by year to count the total homicides, tallies cases closed by arrest and calculates the percentage of homicides that resulted in arrests. This let us assess whether the patterns in Baltimore during this period were unique to the city or showed a broader trend across multiple police departments. 
+
+332-334: This merges Boston's 2015-2017 homicide statistics with its population data to calculate the city's homicide rate per 100,000 residents for those years. The left_join() function combines the homicide and arrest counts with the population estimates by matching years. Then, it calculates the standardized homicide rate by dividing the number of homicicides by the population and multiplying by 100,000, creating a rate that accounts for Boston's population size and can be compared with Baltimore's and Chicago's rates to determine if the spike in violence after 2015 was a Baltimore-specific event or part of a wider trend affecting other cities. 
+
 ```{r}
 # Get Boston homicides (2015-2017)
 num_hom_and_arrests_boston_by_year_post_2015 <- homicides_wapo %>%
@@ -310,6 +327,14 @@ num_hom_and_arrests_boston_by_year_post_2015 <- homicides_wapo %>%
   ) %>%
   arrange(year)
 ```
+```{r}
+# Calculate post-2015 rates
+bos_hom_rates_post_2015 <- num_hom_and_arrests_boston_by_year_post_2015 %>%
+  left_join(pop_estimates_boston_post_2015, by = "year") %>%
+  mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
+```
+
+342-351: This analyzes St. Louis homicide data before 2015, calculating the total number of homicides, arrests and the arrest rate for each year to establish a baseline for another comparison city. The code filters the Washington Post homicide dataset to include only St. Louis cases before Jan. 1, 2015. It then takes the year from each homicide's reported date and then groups the data by year to count total homicides, tally cases closed by arrest and calculate the precentage of homicides that resulted in arrests. 
 
 ```{r}
 # ST. LOUIS ANALYSIS
@@ -325,6 +350,8 @@ num_hom_and_arrest_stl_by_year_pre_2015 <- homicides_wapo %>%
   ) %>%
   arrange(year)
 ```
+
+358-385: This downloaded the annual population estimates for St. Louis from 2015 to 2017 using the Census API, giving the demographics needed to calculate homicide rates for this city. The get_estimates() function retrieves St. Louis' population using its place code (65000) in Missouri, converting the Census' date codes into readable years. It only keeps the 2015-2017 estimates and organizes them into a two-column format with year and population that can be merged with St. Louis homicide data. 
 
 ```{r}
 # Get population estimates for St. Louis
@@ -358,6 +385,10 @@ pop_estimates_stl_post_2015 <- get_estimates(
   arrange(year)
 ```
 
+394-403:This analyzes St. Louis homicide data from 2015 through 2017, calculating the total number of homicides, arrests and arrest rate for each year to complete the post-2015 comparison with Baltimore, Chicago and Boston. The code filters the Washington Post homicide dataset to have only St. Louis cases between Jan. 1, 2015, and Dec. 31, 2017. The code then extracts the year from each homicide's reported date, and groups the data by year to count total homicides, tally cases closed by arrest and calculate the percentage of homicides that resulted in arrest. 
+
+407-409: This combines St. Louis/ 2015-2017 homicide statistics with its population data to calculate the city's homicide rate per 100,000 residents for those years. The left_join() function combines the homicide and arrest counts with the corresponding population estimates by matching years, and then calculating the homicide rate by using the same formula for Baltimore, Chicago and Boston's information. 
+
 ```{r}
 # Get St. Louis homicides for 2015-2017
 num_hom_and_arrests_stl_by_year_post_2015 <- homicides_wapo %>%
@@ -370,7 +401,23 @@ num_hom_and_arrests_stl_by_year_post_2015 <- homicides_wapo %>%
     arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
   ) %>%
   arrange(year)
+```
+```{r}
+# Calculate post-2015 rates
+stl_hom_rates_post_2015 <- num_hom_and_arrests_stl_by_year_post_2015 %>%
+  left_join(pop_estimates_stl_post_2015, by = "year") %>%
+  mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
+```
 
-# Use census estimates for St. Louis populations
-populations_stl_post_2015 <- pop_estimates_stl_post_2015
+416-422: this combines the 2015-2017 homicide rate dat from all four cities, Baltimore, Chicago, Boston and St. Louis, into a single dataset for comparative analysis. The bind_rows() function stacks the four separate datasets on top of each other after adding a label for each city using mutate(). Then we used arrange() to sort the combined data first by city name in alphabetical orger and then by year per city, creating one master dataset that allowed us to compare homicide rates, arrest rates and population trends accros all of these cities post-2015.
+
+```{r}
+# Combine all cities' post-2015 data for comparison
+all_cities_post_2015 <- bind_rows(
+  chi_hom_rates_post_2015 %>% mutate(city = "Chicago"),
+  bos_hom_rates_post_2015 %>% mutate(city = "Boston"),
+  stl_hom_rates_post_2015 %>% mutate(city = "St. Louis"),
+  bmore_hom_rates_post_2015 %>% mutate(city = "Baltimore")
+) %>%
+  arrange(city, year)
 ```
