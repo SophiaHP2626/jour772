@@ -409,7 +409,7 @@ stl_hom_rates_post_2015 <- num_hom_and_arrests_stl_by_year_post_2015 %>%
   mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
 ```
 
-416-422: this combines the 2015-2017 homicide rate dat from all four cities, Baltimore, Chicago, Boston and St. Louis, into a single dataset for comparative analysis. The bind_rows() function stacks the four separate datasets on top of each other after adding a label for each city using mutate(). Then we used arrange() to sort the combined data first by city name in alphabetical orger and then by year per city, creating one master dataset that allowed us to compare homicide rates, arrest rates and population trends accros all of these cities post-2015.
+416-422: this combines the 2015-2017 homicide rate dat from all four cities, Baltimore, Chicago, Boston and St. Louis, into a single dataset for comparative analysis. The bind_rows() function stacks the four separate datasets on top of each other after adding a label for each city using mutate(). Then we used arrange() to sort the combined data first by city name in alphabetical orger and then by year per city, creating one master dataset that allowed us to compare homicide rates, arrest rates and population trends accros all of these cities post-2015.In Chicago, the homicide arrest rate dropped 21 percentage points compared to 2014, in Boston 12 points, and in St. Louis it dropped 9 points. 
 
 ```{r}
 # Combine all cities' post-2015 data for comparison
