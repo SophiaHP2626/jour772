@@ -1,6 +1,6 @@
 ---
 title: "Reverse Engineering Project"
-author: "Raphael Romero Ruiz & Sophie"
+author: "Raphael Romero Ruiz & Sophia Hernadez-Piña"
 date: "`Oct. 9 2025`"
 ---
 
@@ -8,6 +8,7 @@ date: "`Oct. 9 2025`"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+13-23: Here we installed a package called tidycensus with enabled us to more easily use and work with data from the U.S. Census Bureau. We used this to pull information about the murder rates v. how many murders have been solved during certain time frames. We also installed the census_api_key, which holds the original data we will be using.
 ```{r}
 install.packages("tidycensus")
 ```
@@ -21,12 +22,12 @@ library(readxl)
 
 census_api_key("a053b1e13b17cfecd7fea96af2fc15059d046f8c", install=TRUE)
 ```
-
+27-28: This code reads a CSV file that hold homicide data and then simplified the column names into a consistent, lowercase format, which made it easier for us to work with the data. 
 ```{r}
 homicides_wapo <- read_csv("data-homicides/homicide-data.csv") %>% 
   clean_names()
 ```
-
+33-39: This code fixes two issues in the reported dates and then converted all the data from the numbers into a proper date formation that R can understand. The mutate() function corrects two data entry errors, changing "201511105" to "20151105" and "201511018" to "20151118," while leaving all other dates the same, then we used the ymd() function to transform the numbers into a year-month-day format into actual date object that can be used for time-based analysis.
 ```{r}
 # First make sure reported_date is in proper date format
 homicides_wapo <- homicides_wapo %>%
@@ -37,6 +38,8 @@ homicides_wapo <- homicides_wapo %>%
   )) %>%
   mutate(reported_date = ymd(reported_date))
 ```
+
+47-60: This code imports historical Census population data for Baltimore city from a file, cleaning it up and reshaping it into a simple two-column format that shows the year and the population. The code standardizes the column names, filters to keep only the information from Baltimore city, and then extracts data from 2007, 2008 and 2009 populations. This made it easier to combine with other datasets.
 
 ```{r}
 # Get population estimates for Baltimore City (2007-2014)
@@ -56,7 +59,7 @@ census_pop_2007_2009 <- read_xls("census-data/co-est00int-01-24.xls") %>%
   mutate(year = as.numeric(str_extract(year_col, "[0-9]{4}"))) %>%
   select(year, population)
 ```
-
+65-92: This uses the tidycensus package to download population estimates for Baltimore city from 2010 through 2014 directly from the U.S. Census' API. The get_estimates() function retrives the time-based population data using Baltimore's FIPS code (510), the the code translates the Census Bureau's numeric date codes into actual years, keeping only the estimates from 2010 to 2014, and creates a two-column dataset with year and population that matches the format of the earlier data.
 ```{r}
 # Then get 2010-2014 from Census API
 census_pop_2010_2014 <- get_estimates(
@@ -88,7 +91,7 @@ census_pop_2010_2014 <- get_estimates(
   filter(year >= 2010 & year <= 2014) %>%
   arrange(year)
 ```
-
+97-101: This combines the two serparate population datasets, one covering 2007 to 2009 and the other covering 2010 to 2014, into a single dataset that sorts it chronologically by year. The bind_rows() function stacks the two datasets on top of each other snce they share the same column structure. arrange() makes sure all the years appear in order from earliest to latest, creating one continuous population series for Baltimore city from 2007 to 2014.
 ```{r}
 # Combine 2007-2009 Excel data with 2010-2014 Census API data
 pop_estimates_pre_2015 <- bind_rows(
@@ -97,6 +100,8 @@ pop_estimates_pre_2015 <- bind_rows(
 ) %>%
   arrange(year)
 ```
+
+106-135:This downloads population estimates for Baltimore city from 2015 to 2017 using the same Census API. It coverts the data into a clean format in chronological order. The process is similar to the previous download but filters the data to only keep the years 2015 through 2017, translating the Census' numeric date codes into readable years and organizes the data into two-column datasets. The dataset shows the year and population that can be joined with the pre-2015 data.
 
 ```{r}
 # Get population estimates for Baltimore City (post-2015)
@@ -130,6 +135,8 @@ pop_estimates_post_2015 <- get_estimates(
   arrange(year)
 ```
 
+142-151: This analyzes baltimore homicide data before 2015, calculating the total number of homicides, arrests and the arrest rate for each year. The code filters the Washington Post homicide dataset to include only Baltimore cases before Jan 1, 2015, extracting the year from each homicide's reported date and then groups the data by year to count the total homicides. It then tallies how many cases resulted in arrests and calculate the percentage of homicides that led to arrests, rounding the arrest rate and presenting the data in chronological order.
+
 ```{r}
 # Get Baltimore homicides and arrests by year before 2015
 num_hom_and_arrest_bmore_by_year_pre_2015 <- homicides_wapo %>%
@@ -143,6 +150,8 @@ num_hom_and_arrest_bmore_by_year_pre_2015 <- homicides_wapo %>%
   ) %>%
   arrange(year)  # Sort by year
 ```
+
+158-167: This shows the same homicide and arrest analysis as the previous code but focuses specifically on Baltimore cases from 2015 through 2017, the period after Freddie Gray's death and the turmoil that followed. The code filters the Washington Post data to include only Baltimore homicides that occured between jan. 1, 2015 and Dec. 31, 2017. It then calculates the annual totals for homicides and arrests along with the arrest rate for each year, letting us compare how policing patterns may have changed during this timeframe. 
 
 ```{r}
 # Get Baltimore homicides and arrests for 2015-2017
@@ -158,12 +167,16 @@ num_hom_and_arrests_bmore_by_year_post_2015 <- homicides_wapo %>%
   arrange(year)
 ```
 
+174-176: This code combines the pre-2015 Baltimore homicide statisitics with population data to calculate the homicide rater ber 100,000 residents for each year. The lef_join() function merges the homicde and arrest counts with the corresponding population estimates by matching years. Then, the code calculates the standardized homicide rate by dividing the number of homicides by the populatio and multiplying by 100,000, rounding the results.
+
 ```{r}
 # Calculate pre-2015 rates
 bmore_hom_rates_pre_2015 <- num_hom_and_arrest_bmore_by_year_pre_2015 %>%
   left_join(pop_estimates_pre_2015, by = "year") %>%
   mutate(homicide_rate_per_100k = round((homicides / population) * 100000, 1))
 ```
+
+183-185: This merges the 2015-2017 Baltimore homicide statistics with population data to calculate the homicide rate per 100,000 resident for those post-Freddie Gray years. Using the same methods for the pre-2015 analysis, the code joins the homicide and arrest counts with the corresponding population estimates by year. It then standardizes the homicide rate, divinding homicides by population and multiplying by 100,000, to create a rate that accounts for population changes that can be directly compared with the earlier years to asses whether violence in baltimore city has increased after 2015. 
 
 ```{r}
 # Calculate post-2015 rates
