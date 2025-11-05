@@ -1,0 +1,386 @@
+---
+title: "Reverse Engineering Project"
+author: "Raphael Romero Ruiz & Sophia Hernandez-Piña"
+date: "`Oct. 9 2025`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(dplyr)
+library(tidycensus)
+library(readxl)
+library(sf)
+
+census_api_key(Sys.getenv("CENSUS_API_KEY"), install=TRUE, overwrite=TRUE)
+```
+
+## Load homicide data
+```{r}
+homicides_wapo <- read_csv("data-homicides/homicide-data.csv") %>% 
+  clean_names()
+```
+
+## Data cleaning
+```{r}
+# First make sure reported_date is in proper date format
+homicides_wapo <- homicides_wapo %>%
+  mutate(reported_date = case_when(
+    reported_date == 201511105 ~ 20151105,
+    reported_date == 201511018 ~ 20151118, 
+    TRUE ~ reported_date
+  )) %>%
+  mutate(reported_date = ymd(reported_date))
+```
+
+## For this assignment, we are tasked to reverse engineer a few of the findings from "As police struggle to solve homicides, Baltimore residents see an ‘open season for killing’" published by The Washington Post on December 27, 2018.
+
+## We picked these five findings to recreate in this data document: 
+### 1. "Of 50 of the nation’s largest cities, Baltimore is one of 34 where police now make homicide arrests less often than in 2014, according to a Washington Post analysis. In Chicago, the homicide arrest rate has dropped 21 percentage points, in Boston it has dropped 12 points and in St. Louis it is down 9."
+### 2. "For most of the decade before 2015, Baltimore’s annual homicide arrest rate hovered at about 40 percent. Since 2015, the arrest rate hasn’t topped 30 percent in any year. And while most cities saw their arrest rates drop gradually, Baltimore’s decline was sudden — plummeting 15 percentage points in 2015, after Gray’s death, the largest single-year drop for any city already solving less than half its homicides."
+### 3. "As Baltimore has seen a stunning surge of violence, with nearly a killing each day for the past three years in a city of 600,000, homicide arrests have plummeted. City police made an arrest in 41 percent of homicides in 2014; last year, the rate was just 27 percent, a 14 percentage point drop."
+### 4. "Each Baltimore detective, on average, now is responsible for nine homicide cases and, with other suspicious deaths factored in, about 31 total active cases, Tuggle said. A Post analysis of homicides nationwide found that major police departments that have success in making arrests generally assign detectives fewer than five cases a year."
+### 5. "Sandtown-Winchester, where Gray died, has seen 22 more homicides in the three-year period since Gray’s death than it did in the three years before he died. Southwest Baltimore saw its homicides rise by 35, and Greater Rosemont has seen 26 more since 2015. In each of those neighborhoods, police make an arrest in fewer than 25 percent of cases, including 16 percent in Sandtown-Winchester."
+
+## Finding 1:
+### "Of 50 of the nation’s largest cities, Baltimore is one of 34 where police now make homicide arrests less often than in 2014, according to a Washington Post analysis. In Chicago, the homicide arrest rate has dropped 21 percentage points, in Boston it has dropped 12 points and in St. Louis it is down 9."
+
+## How we recreated Finding 1:
+### In order to compare Baltimore with the rest of the country, we needed to found out how many homicide arrests were made in the city. In order to do so we first needed to get a total number of homicides in Baltimore in 2014 and the years after that up to 2017. Similary we need to gather the total number of arrests police made for homicide cases. Then we needed to do the same thing for Boston, Chicago and St. Louis as they specifically mentioned in the graf. We could apply the same logic to other cities as well, but for the sake of this assignment we focused on these four.
+
+## Sophia Hernandez-Piña
+```{r}
+# Chunk 1: Get homicide totals for Baltimore (from 2014 to 2017) and calculate arrest rates
+num_hom_and_arrest_bmore_2014_2017 <- homicides_wapo %>%
+  filter(city == "Baltimore" & reported_date >= "2014-01-01" & reported_date < "2018-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)  # Sort by year
+```
+
+## Raphael Romero Ruiz
+```{r}
+# Chunk 2: Get homicide totals for Chicago (from 2014 to 2017) and calculate arrest rates
+num_hom_and_arrest_chicago_2014_2017 <- homicides_wapo %>%
+  filter(city == "Chicago" & reported_date >= "2014-01-01" & reported_date < "2018-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)  # Sort by year
+```
+
+## Raphael Romero Ruiz
+```{r}
+# Chunk 3: Get homicide totals for Boston (from 2014 to 2017) and calculate arrest rates
+num_hom_and_arrest_boston_2014_2017 <- homicides_wapo %>%
+  filter(city == "Boston" & reported_date >= "2014-01-01" & reported_date < "2018-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)  # Sort by year
+```
+
+## Sophia Hernandez-Piña
+```{r}
+# Chunk 3: Get homicide totals for St. Louis (from 2014 to 2017) and calculate arrest rates
+num_hom_and_arrest_st_louis_2014_2017 <- homicides_wapo %>%
+  filter(city == "St. Louis" & reported_date >= "2014-01-01" & reported_date < "2018-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)  # Sort by year
+```
+
+## Raphael Romero Ruiz
+```{r}
+# Chunk 5: Combine all cities' data for comparison
+combined_homicide_data <- bind_rows(
+  num_hom_and_arrest_bmore_2014_2017 %>% mutate(city = "Baltimore"),
+  num_hom_and_arrest_chicago_2014_2017 %>% mutate(city = "Chicago"),
+  num_hom_and_arrest_boston_2014_2017 %>% mutate(city = "Boston"),
+  num_hom_and_arrest_st_louis_2014_2017 %>% mutate(city = "St. Louis")
+) %>%
+  select(year, city, homicides, arrests, arrest_rate)
+
+combined_homicide_data_clean_tbl <- combined_homicide_data %>%
+  select(city, year, arrest_rate) %>%
+  pivot_wider(names_from = year, values_from = arrest_rate)
+```
+
+## GGPlot for Homicide Arrest Rates:
+## Sophia Hernandez-Piña    
+```{r}
+ggplot(combined_homicide_data, aes(x = year, y = arrest_rate, color = city, group = city)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  labs(
+    title = "Homicide Arrest Rates by Ciyu (2014-2017)",
+    x = "Year",
+    y = "arrest Rate (%)",
+    color = "City",
+    caption = "Source: The Washington Post. Created by: Sophia Hernandez-Piña"
+  ) +
+  theme_minimal () +
+  scale_x_continuous(breaks = 2014:2017)
+```
+
+## GGplot for Homicide Rates:
+## Sophia Hernandez-Piña
+```{r}
+ggplot(combined_homicide_data, aes(x = year, y = homicides, color = city, group = city)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  labs(
+    title = "Homicide Rates by Ciyu (2014-2017)",
+    x = "Year",
+    y = "arrest Rate (%)",
+    color = "City",
+    caption = "Source: The Washington Post. Created by: Sophia Hernandez-Piña"
+  ) +
+  theme_minimal () +
+  scale_x_continuous(breaks = 2014:2017)
+```
+
+## Finding 2:
+### "For most of the decade before 2015, Baltimore’s annual homicide arrest rate hovered at about 40 percent. Since 2015, the arrest rate hasn’t topped 30 percent in any year. And while most cities saw their arrest rates drop gradually, Baltimore’s decline was sudden — plummeting 15 percentage points in 2015, after Gray’s death, the largest single-year drop for any city already solving less than half its homicides."
+
+## How we recreated Finding 2:
+### To recreate this finding, we needed to calculate Baltimore's homicide arrest rates for each year from 2007 to 2017. This required obtaining population estimates for Baltimore City for the years 2007 to 2017, which we did using a combination of an Excel file for 2007-2009 data and the Census API for 2010-2017 data. We then calculated the total number of homicides and arrests for each year in Baltimore, and finally computed the homicide rates per 100,000 residents for each year to observe the trends before and after 2015. We did not compare with other cities for this finding, as it focuses solely on Baltimore's trends.
+
+## Raphael Romero Ruiz
+```{r}
+# Chunk 1: Get homicide and arrest totals for Baltimore (from 2007 to 2017) and calculate arrest rates
+num_hom_and_arrest_bmore_2007_2017 <- homicides_wapo %>%
+  filter(city == "Baltimore" & reported_date >= "2007-01-01" & reported_date < "2018-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)
+```
+
+## GGplot for Baltimore Homicides and Arrests (2007-2014):
+## Sophia Hernandez-Piña
+```{r}
+ggplot(num_hom_and_arrest_bmore_2007_2017) +
+  geom_line(aes(x = year, y = homicides, color = "Homicides"), size = 1.2) +
+  geom_point(aes(x = year, y = homicides, color = "Homicides"), size = 3) +
+  geom_line(aes(x = year, y = arrests, color = "Arrests"), size = 1.2) +
+  geom_point(aes(x = year, y = arrests, color = "Arrests"), size = 3) +
+  labs(
+    title = "Baltimore Homicides and Arrests (2007-2017)",
+    x = "Year",
+    y = "Count",
+    color = "Metric",
+    caption = "Source: The Washington Post. Created by: Sophia Hernandez-Piña"
+  ) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 2007:2017) +
+  scale_color_manual(values = c("Homicides" = "coral", "Arrests" = "steelblue"))
+```
+## Finding 3:
+### "As Baltimore has seen a stunning surge of violence, with nearly a killing each day for the past three years in a city of 600,000, homicide arrests have plummeted. City police made an arrest in 41 percent of homicides in 2014; last year, the rate was just 27 percent, a 14 percentage point drop."
+
+## How we recreated Finding 3:
+### To recreate this finding, we needed to calculate Baltimore's homicide arrest rates specifically for the years 2014 and 2017. This involved obtaining the total number of homicides and arrests for those two years, and then calculating the arrest rates to observe the change from 41 percent in 2014 to 27 percent in 2017. We filtered an existing population dataset to include only these years to get population estimates. We also calculated the average number of homicides per day during this period to confirm the "nearly a killing each day" statement.
+
+## Sophia Hernandez-Piña
+```{r}
+# Chunk 1: Get homicide totals for Baltimore (from 2014 to 2017)
+num_hom_and_arrest_bmore_2014_2017 <- homicides_wapo %>%
+  filter(city == "Baltimore" & reported_date >= "2014-01-01" & reported_date < "2018-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  group_by(year) %>%
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1)
+  ) %>%
+  arrange(year)  # Sort by year
+```
+
+## Raphael Romero Ruiz
+```{r}
+# Chunk 2: Get population estimates for Baltimore City (2014-2017)
+census_pop_2014_2017 <- get_estimates(
+    geography = "county",
+    vintage = 2019,
+    time_series = TRUE,
+    state = "MD",
+    county = "510",  # Baltimore City FIPS code
+    variable = "POP"
+  ) %>%
+  # The date column uses Census codes based on official documentation
+  mutate(year = case_when(
+    DATE == 1 ~ 2010,  # April 1, 2010 Census count
+    DATE == 2 ~ NA,  # April 1, 2010 estimates base (not used)
+    DATE == 3 ~ NA,  # July 1, 2010 estimate (not used)
+    DATE == 4 ~ 2011,  # July 1, 2011 estimate
+    DATE == 5 ~ 2012,  # July 1, 2012 estimate
+    DATE == 6 ~ 2013,  # July 1, 2013 estimate
+    DATE == 7 ~ 2014,  # July 1, 2014 estimate
+    DATE == 8 ~ 2015,  # July 1, 2015 estimate
+    DATE == 9 ~ 2016,  # July 1, 2016 estimate
+    DATE == 10 ~ 2017, # July 1, 2017 estimate
+    DATE == 11 ~ 2018, # July 1, 2018 estimate
+    DATE == 12 ~ 2019, # July 1, 2019 estimate
+    TRUE ~ as.numeric(DATE)
+  )) %>%
+  select(year, value) %>%
+  rename(population = value) %>%
+  filter(year >= 2014 & year <= 2017) %>%
+  arrange(year)
+```
+
+## Raphael Romero Ruiz
+```{r}
+#Chunk 3: Calculate the number of homicides per day in Baltimore from 2014 to 2017
+bmore_homicides_per_day_2014_2017 <- num_hom_and_arrest_bmore_2014_2017 %>%
+  mutate(homicides_per_day = round(homicides / 365, 2))
+```
+
+## GGplot for Baltimore Homicides and Arrest Rate (2014-2017):
+## Sophia Hernandez-Piña
+```{r}
+ggplot(bmore_homicides_per_day_2014_2017) +
+  geom_line(aes(x = year, y = homicides_per_day, color = "Homicides per Day"), size = 1.2) +
+  geom_point(aes(x = year, y = homicides_per_day, color = "Homicides per Day"), size = 3) +
+  geom_line(aes(x = year, y = arrest_rate / 10, color = "Arrest Rate (%)"), size = 1.2) +
+  geom_point(aes(x = year, y = arrest_rate / 10, color = "Arrest Rate (%)"), size = 3) +
+  labs(
+    title = "Baltimore Homicides and Arrest Rate (2014-2017)",
+    x = "Year",
+    y = "Value",
+    color = "Metric",
+    caption = "Note: Arrest rate divided by 10 for scale\nSource: Washington Post homicide database. Created by: Sophia Hernandez-Piña"
+  ) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 2014:2017) +
+  scale_color_manual(values = c("Homicides per Day" = "darkred", "Arrest Rate (%)" = "steelblue"))
+```
+
+## Finding 4:
+### "Each Baltimore detective, on average, now is responsible for nine homicide cases and, with other suspicious deaths factored in, about 31 total active cases, Tuggle said. A Post analysis of homicides nationwide found that major police departments that have success in making arrests generally assign detectives fewer than five cases a year."
+
+### How we recreated Finding 4: 
+```{r}
+#This is a finding based on statements from Baltimore Police Commissioner Tuggle and a Post analysis of homicide cases nationwide. The data used in this finding is not directly available in the homicide dataset. Therefore, we cannot recreate this finding quantitatively using the provided data.
+
+```
+
+
+## Finding 5:
+### "Sandtown-Winchester, where Gray died, has seen 22 more homicides in the three-year period since Gray’s death than it did in the three years before he died. Southwest Baltimore saw its homicides rise by 35, and Greater Rosemont has seen 26 more since 2015. In each of those neighborhoods, police make an arrest in fewer than 25 percent of cases, including 16 percent in Sandtown-Winchester."
+
+### How we recreated Finding 5: We needed to spatially join the homicide data with Baltimore neighborhood shapefiles to identify which homicides occurred in specific neighborhoods. We then calculated the total number of homicides and arrests for the neighborhoods of interest (Sandtown-Winchester/Harlem Park, Southwest Baltimore, and Greater Rosemont) for the periods 2012-2014 and 2015-2017. Finally, we computed the changes in homicides and arrest rates for these neighborhoods.
+
+## Raphael Romero Ruiz
+```{r}
+# Chunk 1: Convert homicide data to spatial points
+homicides_sf <- homicides_wapo %>%
+  filter(city == "Baltimore" & !is.na(lat) & !is.na(lon)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+```
+
+## Raphael Romero Ruiz
+```{r}
+# Chunk 2: Get Baltimore neighborhood shapefile
+bmore_neighborhoods <- st_read("balt_shape_file/Community_Statistical_Areas_(CSAs)_Reference_Boundaries.geojson") %>%
+clean_names()
+
+# Spatially join homicides with neighborhoods
+homicides_with_neighborhoods <- st_join(homicides_sf, bmore_neighborhoods)
+```
+
+### Raphael Romero Ruiz
+```{r}
+# Chunk 3: Define neighborhoods of interest
+neighborhoods_of_interest <- c("Sandtown-Winchester/Harlem Park", "Southwest Baltimore", "Greater Rosemont")
+```
+
+### Raphael Romero Ruiz
+```{r}
+# Chunk 4: Get homicide totals for Baltimore neighborhoods (2012-2014 vs. 2015-2017)
+homicides_bmore_neighborhoods <- homicides_with_neighborhoods %>%
+  filter(reported_date >= "2012-01-01" & reported_date < "2018-01-01") %>%
+  mutate(year = year(reported_date)) %>%
+  st_drop_geometry() %>%
+  group_by(community, year) %>% 
+  summarise(
+    homicides = n(),
+    arrests = sum(disposition == "Closed by arrest"),
+    arrest_rate = round((sum(disposition == "Closed by arrest") / n()) * 100, 1),
+    .groups = "drop"
+  ) %>%
+  arrange(community, year)
+```
+
+### Raphael Romero Ruiz
+```{r}
+# Chunk 5: Calculate changes in homicides and arrest rates for specific neighborhoods
+homicide_changes_neighborhoods <- homicides_bmore_neighborhoods %>%
+  filter(community %in% neighborhoods_of_interest) %>%  
+  group_by(community) %>% 
+  summarise(
+    homicides_2012_2014 = sum(homicides[year >= 2012 & year <= 2014]),
+    homicides_2015_2017 = sum(homicides[year >= 2015 & year <= 2017]),
+    change_in_homicides = homicides_2015_2017 - homicides_2012_2014,
+    arrests_2012_2014 = sum(arrests[year >= 2012 & year <= 2014]),
+    arrests_2015_2017 = sum(arrests[year >= 2015 & year <= 2017]),
+    total_homicides_2015_2017 = homicides_2015_2017,
+    arrest_rate_2015_2017 = round((arrests_2015_2017 / total_homicides_2015_2017) * 100, 1)
+  )
+```
+
+## GGplot for Homicides and Arrests in Baltimore Neighborhoods (2012-2017)
+## Sophia Hernandez-Piña
+```{r}
+homicides_bmore_neighborhoods %>%
+  filter(community %in% neighborhoods_of_interest) %>%
+  select(community, year, homicides, arrests) %>%
+  pivot_longer(cols = c(homicides, arrests), 
+               names_to = "metric", 
+               values_to = "count") %>%
+  ggplot(aes(x = year, y = count, color = community, group = community)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  facet_wrap(~metric, scales = "free_y", 
+             labeller = labeller(metric = c(homicides = "Homicides", arrests = "Arrests"))) +
+  labs(
+    title = "Homicides and Arrests in Baltimore Neighborhoods (2012-2017)",
+    x = "Year",
+    y = "Count",
+    color = "Neighborhood",
+    caption = "Source: The Washington Post. Created by: Sophia Hernandez-Piña"
+  ) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 2012:2017) +
+  theme(legend.position = "bottom")
+
+```
